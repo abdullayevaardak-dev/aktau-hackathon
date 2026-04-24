@@ -68,7 +68,11 @@ with tab1:
                 
                 phone_clean = row['phone'].replace("+", "").replace(" ", "").replace("-", "")
                 st.markdown(f"[💬 Написать работодателю в WhatsApp](https://wa.me/{phone_clean})")
-
+# Кнопка удаления
+                if st.button("❌ Удалить эту вакансию", key=f"del_vac_{row['id']}"):
+                    c.execute("DELETE FROM vacancies WHERE id=?", (row['id'],))
+                    conn.commit()
+                    st.rerun()
 # --- ВКЛАДКА 2: БАЗА РЕЗЮМЕ (Для бизнеса) ---
 with tab2:
     st.subheader("Таланты Актау (База соискателей)")
