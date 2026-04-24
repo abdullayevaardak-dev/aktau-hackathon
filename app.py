@@ -8,23 +8,30 @@ from sklearn.metrics.pairwise import cosine_similarity
 # --- НАСТРОЙКИ ПРИЛОЖЕНИЯ ---
 st.set_page_config(page_title="Aktau Job Wave", layout="wide", page_icon="🌊")
 
-# --- ПАМЯТЬ СЕССИИ (ДЛЯ АВТОРИЗАЦИИ) ---
+# --- ПАМЯТЬ СЕССИИ (ДЛЯ АВТОРИЗАЦИИ И РОЛЕЙ) ---
 if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
-    st.session_state.username = ""
+    st.session_state.login = ""
+    st.session_state.role = ""
 
-st.title("🌊 Aktau Job Wave")
-st.markdown("### Платформа занятости для молодежи и малого бизнеса Мангистау")
-st.divider()
-
-# --- БАЗА ДАННЫХ ---
-conn = sqlite3.connect('aktau_jobs.db', check_same_thread=False)
+# --- БАЗА ДАННЫХ (ВЕРСИЯ 2) ---
+conn = sqlite3.connect('aktau_jobs_v2.db', check_same_thread=False)
 c = conn.cursor()
-c.execute('''CREATE TABLE IF NOT EXISTS vacancies (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, desc TEXT, location TEXT, phone TEXT)''')
-c.execute('''CREATE TABLE IF NOT EXISTS resumes (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, skills TEXT, location TEXT, phone TEXT)''')
-# Создаем новую таблицу специально для зарегистрированных пользователей
-c.execute('''CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT, password TEXT)''')
+# Таблица пользователей
+c.execute('''CREATE TABLE IF NOT EXISTS users_v2 (id INTEGER PRIMARY KEY AUTOINCREMENT, login TEXT, password TEXT, role TEXT)''')
+# Таблица вакансий (добавили зарплату)
+c.execute('''CREATE TABLE IF NOT EXISTS vacancies_v2 (id INTEGER PRIMARY KEY AUTOINCREMENT, login TEXT, title TEXT, desc TEXT, salary TEXT, location TEXT, phone TEXT)''')
+# Таблица резюме (добавили ФИО, дату рождения, желаемую должность)
+c.execute('''CREATE TABLE IF NOT EXISTS resumes_v2 (id INTEGER PRIMARY KEY AUTOINCREMENT, login TEXT, fullname TEXT, dob TEXT, desired TEXT, experience TEXT)''')
 conn.commit()
+
+# --- TELEGRAM БОТ ---
+def send_telegram(message):
+    TOKEN = "ВАШ_ТОКЕН" # <-- ВАЖНО: Вставьте ваш токен!
+    CHAT_ID = "ВАШ_CHAT_ID" # <-- ВАЖНО: Вставьте ваш канал!
+    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage?chat_id={CHAT_ID}&text={message}"
+    try: requests.get(url)
+    except: pass
 
 # --- ИИ-МАТЧИНГ ---
 def calculate_ai_match(resume_text, vacancy_text):
@@ -35,132 +42,171 @@ def calculate_ai_match(resume_text, vacancy_text):
         return round(cosine_similarity(tfidf_matrix[0:1], tfidf_matrix[1:2])[0][0] * 100)
     except: return 0
 
-# --- TELEGRAM БОТ ---
-def send_telegram(message):
-    TOKEN = "8353625063:AAGvAYdYZ-oeo3H3OR_fo5VJA6DhJbLYWds" # <-- ВАЖНО: Не забудьте вставить ваш токен!
-    CHAT_ID = "@aktau_jobs_hack" # <-- ВАЖНО: Не забудьте вставить ваш канал!
-    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage?chat_id={CHAT_ID}&text={message}"
-    try: requests.get(url)
-    except: pass
 
-# --- ИНТЕРФЕЙС (5 ВКЛАДОК) ---
-tab1, tab2, tab3, tab4, tab5 = st.tabs(["🔍 Вакансии", "👥 База резюме", "🏢 Разместить вакансию", "👤 Оставить резюме", "🔑 Мой аккаунт"])
+# ==========================================
+# ЭКРАН 1: АВТОРИЗАЦИЯ И РЕГИСТРАЦИЯ
+# ==========================================
+if not st.session_state.logged_in:
+    st.title("🌊 Добро пожаловать в Aktau Job Wave")
+    st.markdown("### Платформа для быстрого поиска работы и сотрудников в Мангистау")
+    st.divider()
 
-# --- ВКЛАДКА 1: ВАКАНСИИ ---
-with tab1:
-    col1, col2 = st.columns([3, 1])
-    with col1: st.subheader("Свежие вакансии")
-    with col2: filter_loc = st.selectbox("📍 Район:", ["Все", "1 мкр", "14 мкр", "27 мкр", "Шугыла"])
-
-    df_vac = pd.read_sql_query("SELECT * FROM vacancies ORDER BY id DESC", conn)
-    df_res = pd.read_sql_query("SELECT * FROM resumes ORDER BY id DESC LIMIT 1", conn)
-    my_skills = df_res['skills'].iloc[0] if not df_res.empty else ""
-
-    if filter_loc != "Все": df_vac = df_vac[df_vac['location'] == filter_loc]
-
-    if df_vac.empty: st.info("Пока нет вакансий в этом районе.")
-    for index, row in df_vac.iterrows():
+    col1, col2 = st.columns(2)
+    
+    with col1:
         with st.container(border=True):
-            st.markdown(f"### 💼 {row['title']}")
-            st.caption(f"📍 **Локация:** {row['location']}")
-            with st.expander("Показать подробное описание и контакты"):
-                st.write(row['desc'])
-                if my_skills:
-                    match_pct = calculate_ai_match(my_skills, row['desc'])
-                    st.progress(match_pct / 100.0)
-                    st.markdown(f"🤖 **AI-совпадение:** `{match_pct}%`")
-                phone_clean = row['phone'].replace("+", "").replace(" ", "").replace("-", "")
-                st.markdown(f"[💬 Написать работодателю в WhatsApp](https://wa.me/{phone_clean})")
+            st.subheader("👋 Впервые здесь? Регистрация")
+            reg_role = st.radio("Кто вы?", ["Я ищу работу (Соискатель)", "Я ищу сотрудников (Работодатель)"])
+            reg_login = st.text_input("Ваш номер телефона или Email", key="reg_log")
+            reg_pass = st.text_input("Придумайте пароль", type="password", key="reg_pass")
+            
+            if st.button("Создать аккаунт", type="primary", use_container_width=True):
+                c.execute("SELECT * FROM users_v2 WHERE login=?", (reg_login,))
+                if c.fetchone():
+                    st.error("❌ Аккаунт с таким номером/email уже существует!")
+                elif reg_login and reg_pass:
+                    role_db = "seeker" if "Соискатель" in reg_role else "employer"
+                    c.execute("INSERT INTO users_v2 (login, password, role) VALUES (?, ?, ?)", (reg_login, reg_pass, role_db))
+                    conn.commit()
+                    st.success("✅ Аккаунт успешно создан! Теперь войдите в систему справа.")
+                else:
+                    st.warning("Пожалуйста, заполните все поля.")
 
-# --- ВКЛАДКА 2: БАЗА РЕЗЮМЕ ---
-with tab2:
-    st.subheader("Таланты Актау (База соискателей)")
-    df_res_all = pd.read_sql_query("SELECT * FROM resumes ORDER BY id DESC", conn)
-    if df_res_all.empty: st.info("Пока нет резюме.")
-    for index, row in df_res_all.iterrows():
+    with col2:
         with st.container(border=True):
-            st.markdown(f"#### 👤 {row['name']}")
-            st.caption(f"📍 **Желаемый район:** {row['location']}")
-            with st.expander("Навыки и опыт"):
-                st.write(row['skills'])
-                phone_clean_res = row['phone'].replace("+", "").replace(" ", "").replace("-", "")
-                st.markdown(f"[💬 Пригласить на работу (WhatsApp)](https://wa.me/{phone_clean_res})")
+            st.subheader("🔑 Уже есть аккаунт? Вход")
+            log_login = st.text_input("Ваш номер телефона или Email", key="login_log")
+            log_pass = st.text_input("Ваш пароль", type="password", key="login_pass")
+            
+            if st.button("Войти на платформу", use_container_width=True):
+                c.execute("SELECT * FROM users_v2 WHERE login=? AND password=?", (log_login, log_pass))
+                user = c.fetchone()
+                if user:
+                    st.session_state.logged_in = True
+                    st.session_state.login = user[1]
+                    st.session_state.role = user[3]
+                    st.rerun()
+                else:
+                    st.error("❌ Неверный логин или пароль")
 
-# --- ВКЛАДКА 3: СОЗДАТЬ ВАКАНСИЮ ---
-with tab3:
-    with st.container(border=True):
-        st.subheader("Опубликовать вакансию")
-        v_title = st.text_input("Должность (например: Бариста)")
-        v_desc = st.text_area("Требования")
-        v_loc = st.selectbox("Микрорайон", ["1 мкр", "14 мкр", "27 мкр", "Шугыла", "Другой"])
-        v_phone = st.text_input("WhatsApp номер (например: 77012345678)")
-        if st.button("🚀 Создать вакансию", use_container_width=True):
-            c.execute("INSERT INTO vacancies (title, desc, location, phone) VALUES (?, ?, ?, ?)", (v_title, v_desc, v_loc, v_phone))
-            conn.commit()
-            st.success("Вакансия опубликована!")
-            phone_clean = v_phone.replace("+", "").replace(" ", "").replace("-", "")
-            msg = f"🔥 Новая вакансия: {v_title}\n📍 Район: {v_loc}\n📞 Телефон: {v_phone}\n💬 WhatsApp: https://wa.me/{phone_clean}"
-            send_telegram(msg)
+# ==========================================
+# ЭКРАН 2: ЛИЧНЫЙ КАБИНЕТ (ПОСЛЕ ВХОДА)
+# ==========================================
+else:
+    # Верхняя панель (Header)
+    col_head1, col_head2 = st.columns([4, 1])
+    with col_head1:
+        if st.session_state.role == "seeker":
+            st.title("👤 Кабинет Соискателя")
+        else:
+            st.title("🏢 Кабинет Работодателя")
+    with col_head2:
+        st.write(f"Вы вошли как: `{st.session_state.login}`")
+        if st.button("🚪 Выйти"):
+            st.session_state.logged_in = False
+            st.session_state.login = ""
+            st.session_state.role = ""
+            st.rerun()
+    st.divider()
 
-# --- ВКЛАДКА 4: СОЗДАТЬ РЕЗЮМЕ ---
-with tab4:
-    with st.container(border=True):
-        st.subheader("Заполнить профиль (CV)")
-        r_name = st.text_input("Ваше Имя и Фамилия")
-        r_skills = st.text_area("Ваши навыки (подробно для ИИ)")
-        r_loc = st.selectbox("Где ищете работу?", ["Любой", "1 мкр", "14 мкр", "27 мкр"])
-        r_phone = st.text_input("Ваш WhatsApp")
-        if st.button("💾 Сохранить резюме", use_container_width=True):
-            c.execute("INSERT INTO resumes (name, skills, location, phone) VALUES (?, ?, ?, ?)", (r_name, r_skills, r_loc, r_phone))
-            conn.commit()
-            st.success("Резюме добавлено в базу!")
-
-# --- ВКЛАДКА 5: СИСТЕМА РЕГИСТРАЦИИ И АККАУНТ ---
-with tab5:
-    if not st.session_state.logged_in:
-        st.subheader("Вход в систему и Регистрация")
-        col_log, col_reg = st.columns(2)
+    # ----------------------------------------
+    # ИНТЕРФЕЙС СОИСКАТЕЛЯ
+    # ----------------------------------------
+    if st.session_state.role == "seeker":
+        tab1, tab2 = st.tabs(["📄 Мое резюме", "🔍 Найти работу"])
         
-        with col_reg:
+        with tab1:
+            st.subheader("Заполните вашу анкету")
             with st.container(border=True):
-                st.markdown("#### 📝 Регистрация")
-                reg_user = st.text_input("Придумайте логин", key="reg_user")
-                reg_pass = st.text_input("Придумайте пароль", type="password", key="reg_pass")
-                if st.button("Создать аккаунт", use_container_width=True):
-                    c.execute("SELECT * FROM users WHERE username=?", (reg_user,))
-                    if c.fetchone():
-                        st.error("❌ Такой логин уже существует!")
-                    elif reg_user and reg_pass:
-                        c.execute("INSERT INTO users (username, password) VALUES (?, ?)", (reg_user, reg_pass))
-                        conn.commit()
-                        st.success("✅ Аккаунт создан! Теперь войдите слева.")
-                    else:
-                        st.warning("Введите логин и пароль.")
+                r_fullname = st.text_input("Ваше ФИО")
+                r_dob = st.date_input("Дата рождения", min_value=pd.to_datetime("1950-01-01"), max_value=pd.to_datetime("2010-01-01"))
+                r_desired = st.text_input("Желаемая должность (например: Менеджер, Бариста)")
+                r_exp = st.text_area("Опыт работы и навыки (расскажите подробнее)")
+                
+                if st.button("💾 Сохранить / Обновить резюме", type="primary"):
+                    # Удаляем старое резюме этого пользователя, чтобы было только одно актуальное
+                    c.execute("DELETE FROM resumes_v2 WHERE login=?", (st.session_state.login,))
+                    c.execute("INSERT INTO resumes_v2 (login, fullname, dob, desired, experience) VALUES (?, ?, ?, ?, ?)", 
+                              (st.session_state.login, r_fullname, str(r_dob), r_desired, r_exp))
+                    conn.commit()
+                    st.success("✅ Ваше резюме успешно сохранено в базе!")
 
-        with col_log:
+            st.markdown("### Ваша текущая анкета в базе:")
+            my_res = pd.read_sql_query("SELECT * FROM resumes_v2 WHERE login=?", conn, params=(st.session_state.login,))
+            if not my_res.empty:
+                st.info(f"**ФИО:** {my_res.iloc[0]['fullname']} | **Ищет работу:** {my_res.iloc[0]['desired']}")
+
+        with tab2:
+            st.subheader("Доступные вакансии")
+            df_vac = pd.read_sql_query("SELECT * FROM vacancies_v2 ORDER BY id DESC", conn)
+            
+            my_skills = my_res.iloc[0]['experience'] if not my_res.empty else ""
+            
+            if df_vac.empty:
+                st.info("Пока нет доступных вакансий.")
+            else:
+                for index, row in df_vac.iterrows():
+                    with st.container(border=True):
+                        st.markdown(f"### 💼 {row['title']}")
+                        st.markdown(f"**💰 Зарплата:** {row['salary']} | **📍 Адрес:** {row['location']}")
+                        with st.expander("Подробные условия"):
+                            st.write(row['desc'])
+                            if my_skills:
+                                match_pct = calculate_ai_match(my_skills, row['desc'])
+                                st.progress(match_pct / 100.0)
+                                st.markdown(f"🤖 **AI-совпадение с вашим опытом:** `{match_pct}%`")
+                            
+                            phone_clean = row['phone'].replace("+", "").replace(" ", "").replace("-", "")
+                            st.markdown(f"[💬 Откликнуться в WhatsApp](https://wa.me/{phone_clean})")
+
+    # ----------------------------------------
+    # ИНТЕРФЕЙС РАБОТОДАТЕЛЯ
+    # ----------------------------------------
+    elif st.session_state.role == "employer":
+        tab1, tab2 = st.tabs(["🏢 Мои вакансии (Создать)", "👥 База талантов (Поиск)"])
+        
+        with tab1:
+            st.subheader("Опубликовать новую вакансию")
             with st.container(border=True):
-                st.markdown("#### 🔑 Войти")
-                login_user = st.text_input("Ваш логин", key="log_user")
-                login_pass = st.text_input("Ваш пароль", type="password", key="log_pass")
-                if st.button("Войти", use_container_width=True):
-                    c.execute("SELECT * FROM users WHERE username=? AND password=?", (login_user, login_pass))
-                    if c.fetchone():
-                        st.session_state.logged_in = True
-                        st.session_state.username = login_user
-                        st.rerun() # Перезагружаем страницу, чтобы пустить пользователя
-                    else:
-                        st.error("❌ Неверный логин или пароль")
+                v_title = st.text_input("Должность")
+                v_desc = st.text_area("Описание условий и требований")
+                v_salary = st.text_input("Заработная плата (например: 150 000 тг)")
+                v_loc = st.text_input("Адрес работы")
+                v_phone = st.text_input("Контактный телефон (WhatsApp)")
+                
+                if st.button("🚀 Создать вакансию", type="primary"):
+                    c.execute("INSERT INTO vacancies_v2 (login, title, desc, salary, location, phone) VALUES (?, ?, ?, ?, ?, ?)", 
+                              (st.session_state.login, v_title, v_desc, v_salary, v_loc, v_phone))
+                    conn.commit()
+                    st.success("✅ Вакансия опубликована!")
+                    # Отправка в Телеграм
+                    phone_clean = v_phone.replace("+", "").replace(" ", "").replace("-", "")
+                    msg = f"🔥 Новая вакансия: {v_title}\n💰 Зарплата: {v_salary}\n📍 Адрес: {v_loc}\n📞 Телефон: {v_phone}\n💬 WhatsApp: https://wa.me/{phone_clean}"
+                    send_telegram(msg)
 
-    else:
-        # Экран, когда пользователь успешно вошел в систему
-        with st.container(border=True):
-            st.subheader(f"👋 Добро пожаловать в профиль, {st.session_state.username}!")
-            st.success("Вы успешно авторизованы в системе.")
-            st.markdown("---")
-            st.write("Здесь находится ваш личный кабинет. Вы можете управлять своими данными, просматривать отклики и редактировать профиль.")
-            st.info("💡 Подсказка для жюри: В MVP версии редактирование объявлений привязано к сессии аккаунта. В полной версии здесь появится панель управления (Dashboard).")
-            st.markdown("---")
-            if st.button("🚪 Выйти из аккаунта"):
-                st.session_state.logged_in = False
-                st.session_state.username = ""
-                st.rerun()
+            st.markdown("### Управление моими вакансиями:")
+            my_vacs = pd.read_sql_query("SELECT * FROM vacancies_v2 WHERE login=?", conn, params=(st.session_state.login,))
+            if my_vacs.empty:
+                st.info("У вас пока нет опубликованных вакансий.")
+            else:
+                for index, row in my_vacs.iterrows():
+                    with st.container(border=True):
+                        st.markdown(f"**{row['title']}** — {row['salary']}")
+                        if st.button("❌ Удалить", key=f"del_vac_{row['id']}"):
+                            c.execute("DELETE FROM vacancies_v2 WHERE id=?", (row['id'],))
+                            conn.commit()
+                            st.rerun()
+
+        with tab2:
+            st.subheader("Резюме соискателей Актау")
+            df_res = pd.read_sql_query("SELECT * FROM resumes_v2 ORDER BY id DESC", conn)
+            if df_res.empty:
+                st.info("Пока нет опубликованных резюме.")
+            else:
+                for index, row in df_res.iterrows():
+                    with st.container(border=True):
+                        st.markdown(f"#### 👤 {row['fullname']}")
+                        st.caption(f"**Желаемая должность:** {row['desired']} | **Возраст (г.р.):** {row['dob']}")
+                        with st.expander("Опыт работы и навыки"):
+                            st.write(row['experience'])
+                            st.markdown(f"**Связаться:** Пользователь зарегистрирован под логином `{row['login']}`")
