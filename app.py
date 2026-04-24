@@ -37,8 +37,8 @@ def calculate_ai_match(resume_text, vacancy_text):
 
 # --- TELEGRAM БОТ ---
 def send_telegram(message):
-    TOKEN = "ВАШ_ТОКЕН" # <-- ВАЖНО: Не забудьте вставить ваш токен!
-    CHAT_ID = "ВАШ_CHAT_ID" # <-- ВАЖНО: Не забудьте вставить ваш канал!
+    TOKEN = "8353625063:AAGvAYdYZ-oeo3H3OR_fo5VJA6DhJbLYWds" # <-- ВАЖНО: Не забудьте вставить ваш токен!
+    CHAT_ID = "@aktau_jobs_hack" # <-- ВАЖНО: Не забудьте вставить ваш канал!
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage?chat_id={CHAT_ID}&text={message}"
     try: requests.get(url)
     except: pass
