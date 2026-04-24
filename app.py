@@ -39,8 +39,8 @@ def calculate_ai_match(resume_text, vacancy_text):
 def send_telegram(message):
     # Для реального бота нужно вставить ваш ТОКЕН и CHAT_ID из BotFather
     # Пока оставим заглушку, чтобы код не выдавал ошибку без ключей
-    TOKEN = "ВАШ_ТОКЕН"
-    CHAT_ID = "ВАШ_CHAT_ID"
+    TOKEN = "8353625063:AAGvAYdYZ-oeo3H3OR_fo5VJA6DhJbLYWds"
+    CHAT_ID = "@aktau_jobs_hack"
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage?chat_id={CHAT_ID}&text={message}"
     try:
         requests.get(url)
