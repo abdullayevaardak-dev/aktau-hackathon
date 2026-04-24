@@ -27,8 +27,8 @@ conn.commit()
 
 # --- TELEGRAM БОТ ---
 def send_telegram(message):
-    TOKEN = "ВАШ_ТОКЕН" # <-- ВАЖНО: Вставьте ваш токен!
-    CHAT_ID = "ВАШ_CHAT_ID" # <-- ВАЖНО: Вставьте ваш канал!
+    TOKEN = "8353625063:AAGvAYdYZ-oeo3H3OR_fo5VJA6DhJbLYWds" # <-- ВАЖНО: Вставьте ваш токен!
+    CHAT_ID = "@aktau_jobs_hack" # <-- ВАЖНО: Вставьте ваш канал!
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage?chat_id={CHAT_ID}&text={message}"
     try: requests.get(url)
     except: pass
