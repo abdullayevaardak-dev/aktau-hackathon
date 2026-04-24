@@ -36,13 +36,7 @@ def send_telegram(message):
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage?chat_id={CHAT_ID}&text={message}"
     try: requests.get(url)
     except: pass
-# --- СЕКРЕТНАЯ АДМИН-ПАНЕЛЬ ---
-st.sidebar.title("🔐 Доступ разработчика")
-st.sidebar.write("Введите пароль, чтобы управлять базой:")
-admin_pass = st.sidebar.text_input("Пароль", type="password")
-is_admin = admin_pass == "admin123" # Пароль, который знаете только вы!
-if is_admin:
-    st.sidebar.success("Режим разработчика активирован!")
+
 # --- ИНТЕРФЕЙС (4 ВКЛАДКИ) ---
 tab1, tab2, tab3, tab4 = st.tabs(["🔍 Вакансии", "👥 База резюме", "🏢 Разместить вакансию", "👤 Оставить резюме"])
 
