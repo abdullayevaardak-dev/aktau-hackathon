@@ -199,8 +199,7 @@ else:
 
         with tab2:
             st.subheader("Резюме соискателей Актау")
-            # --- ССЫЛКА НА ТЕЛЕГРАМ-КАНАЛ ---
-            st.info("🚀 **Хотите узнавать о свежих вакансиях первыми?** Подписывайтесь на наш Telegram-канал: [👉 Перейти в Telegram](https://t.me/aktau_jobs_hack)")
+           
             df_res = pd.read_sql_query("SELECT * FROM resumes_v2 ORDER BY id DESC", conn)
             if df_res.empty:
                 st.info("Пока нет опубликованных резюме.")
