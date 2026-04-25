@@ -139,7 +139,8 @@ else:
         with tab2:
             st.subheader("Доступные вакансии")
             df_vac = pd.read_sql_query("SELECT * FROM vacancies_v2 ORDER BY id DESC", conn)
-            
+             # --- ССЫЛКА НА ТЕЛЕГРАМ-КАНАЛ ---
+            st.info("🚀 **Хотите узнавать о свежих вакансиях первыми?** Подписывайтесь на наш Telegram-канал: [👉 Перейти в Telegram](https://t.me/aktau_jobs_hack)")
             my_skills = my_res.iloc[0]['experience'] if not my_res.empty else ""
             
             if df_vac.empty:
