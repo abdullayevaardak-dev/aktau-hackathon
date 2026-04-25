@@ -127,32 +127,52 @@ else:
             st.rerun()
     st.divider()
 
-    # ----------------------------------------
+# ----------------------------------------
     # ИНТЕРФЕЙС СОИСКАТЕЛЯ
     # ----------------------------------------
     if st.session_state.role == "seeker":
         tab1, tab2 = st.tabs(["📄 Мое резюме", "🔍 Найти работу"])
         
         with tab1:
-            st.subheader("Заполните вашу анкету")
-            with st.container(border=True):
-                r_fullname = st.text_input("Ваше ФИО")
-                r_dob = st.date_input("Дата рождения", min_value=pd.to_datetime("1950-01-01"), max_value=pd.to_datetime("2010-01-01"))
-                r_desired = st.text_input("Желаемая должность (например: Менеджер, Бариста)")
-                r_exp = st.text_area("Опыт работы и навыки (расскажите подробнее)")
-                
-                if st.button("💾 Сохранить / Обновить резюме", type="primary"):
-                    # Удаляем старое резюме этого пользователя, чтобы было только одно актуальное
-                    c.execute("DELETE FROM resumes_v2 WHERE login=?", (st.session_state.login,))
-                    c.execute("INSERT INTO resumes_v2 (login, fullname, dob, desired, experience) VALUES (?, ?, ?, ?, ?)", 
-                              (st.session_state.login, r_fullname, str(r_dob), r_desired, r_exp))
-                    conn.commit()
-                    st.success("✅ Ваше резюме успешно сохранено в базе!")
+            st.subheader("Ваша анкета")
+            
+            # 1. Сначала пытаемся найти существующее резюме в базе
+            c.execute("SELECT fullname, dob, desired, experience FROM resumes_v2 WHERE login=?", (st.session_state.login,))
+            existing_res = c.fetchone()
+            
+            # Если резюме есть, вытаскиваем данные, если нет — ставим пустоту
+            if existing_res:
+                curr_name, curr_dob, curr_desired, curr_exp = existing_res
+                # Превращаем дату из строки обратно в объект даты для Streamlit
+                try: default_dob = pd.to_datetime(curr_dob)
+                except: default_dob = pd.to_datetime("2000-01-01")
+                st.info("💡 У вас уже есть резюме. Вы можете отредактировать его ниже и нажать 'Обновить'.")
+            else:
+                curr_name, default_dob, curr_desired, curr_exp = "", pd.to_datetime("2000-01-01"), "", ""
+                st.warning("У вас еще нет резюме. Заполните данные, чтобы работодатели могли вас найти!")
 
-            st.markdown("### Ваша текущая анкета в базе:")
-            my_res = pd.read_sql_query("SELECT * FROM resumes_v2 WHERE login=?", conn, params=(st.session_state.login,))
-            if not my_res.empty:
-                st.info(f"**ФИО:** {my_res.iloc[0]['fullname']} | **Ищет работу:** {my_res.iloc[0]['desired']}")
+            # 2. Форма с предзаполненными данными
+            with st.container(border=True):
+                r_fullname = st.text_input("Ваше ФИО", value=curr_name)
+                r_dob = st.date_input("Дата рождения", value=default_dob, min_value=pd.to_datetime("1950-01-01"), max_value=pd.to_datetime("2010-01-01"))
+                r_desired = st.text_input("Желаемая должность", value=curr_desired)
+                r_exp = st.text_area("Опыт работы и навыки", value=curr_exp, height=200)
+                
+                if st.button("💾 Сохранить / Обновить резюме", type="primary", use_container_width=True):
+                    if r_fullname and r_desired:
+                        # Удаляем старое и записываем новое
+                        c.execute("DELETE FROM resumes_v2 WHERE login=?", (st.session_state.login,))
+                        c.execute("INSERT INTO resumes_v2 (login, fullname, dob, desired, experience) VALUES (?, ?, ?, ?, ?)", 
+                                  (st.session_state.login, r_fullname, str(r_dob), r_desired, r_exp))
+                        conn.commit()
+                        st.success("✅ Данные успешно обновлены!")
+                        st.rerun() # Перезагружаем, чтобы данные сразу обновились в интерфейсе
+                    else:
+                        st.error("Пожалуйста, заполните ФИО и должность.")
+
+            # Ссылка на ТГ канал (из вашего прошлого запроса)
+            st.divider()
+            st.info("🚀 **Хотите узнавать о свежих вакансиях первыми?** Подписывайтесь на наш Telegram-канал: [👉 Перейти в Telegram](https://t.me/aktau_jobs_hack)")
 
         with tab2:
             st.subheader("Доступные вакансии")
