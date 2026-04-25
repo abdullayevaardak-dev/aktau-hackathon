@@ -88,7 +88,25 @@ if not st.session_state.logged_in:
                     st.rerun()
                 else:
                     st.error("❌ Неверный логин или пароль")
-
+# --- НОВЫЙ БЛОК: СВЕЖИЕ ВАКАНСИИ НА ГЛАВНОЙ ---
+    st.divider()
+    st.subheader("🔥 Свежие вакансии на платформе")
+    
+    df_recent_vacs = pd.read_sql_query("SELECT * FROM vacancies_v2 ORDER BY id DESC LIMIT 3", conn)
+    
+    if df_recent_vacs.empty:
+        st.info("Скоро здесь появятся первые вакансии! Будьте в числе первых работодателей.")
+    else:
+        # Разбиваем на колонки, чтобы карточки стояли в ряд
+        cols = st.columns(len(df_recent_vacs))
+        for i, (index, row) in enumerate(df_recent_vacs.iterrows()):
+            with cols[i]:
+                with st.container(border=True):
+                    st.markdown(f"#### 💼 {row['title']}")
+                    st.markdown(f"**💰 {row['salary']}**")
+                    st.caption(f"📍 {row['location']}")
+                    
+        st.info("👉 **Войдите или зарегистрируйтесь**, чтобы увидеть описание, контакты работодателя и откликнуться!")
 # ==========================================
 # ЭКРАН 2: ЛИЧНЫЙ КАБИНЕТ (ПОСЛЕ ВХОДА)
 # ==========================================
