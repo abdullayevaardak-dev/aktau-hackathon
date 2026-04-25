@@ -207,7 +207,7 @@ else:
                 v_loc = st.text_input("Адрес работы")
                 v_phone = st.text_input("Контактный телефон (WhatsApp)", value="+7", max_chars=12)
                 
-                if st.button("🚀 Создать вакансию", type="primary"):
+               if st.button("🚀 Создать вакансию", type="primary"):
                     if not v_phone.startswith("+7") or len(v_phone) < 11:
                         st.error("❌ Ошибка: Пожалуйста, введите корректный номер телефона (начиная с +7)")
                     elif not v_title or not v_desc:
@@ -219,7 +219,10 @@ else:
                         st.success("✅ Вакансия опубликована!")
                         
                         phone_clean = v_phone.replace("+", "").replace(" ", "").replace("-", "")
-                        msg = f"🔥 Новая вакансия: {v_title}\n💰 Зарплата: {v_salary}\n📍 Адрес: {v_loc}\n📞 Телефон: {v_phone}\n💬 WhatsApp: https://wa.me/{phone_clean}"
+                        
+                        # --- ОБНОВЛЕННОЕ СООБЩЕНИЕ ДЛЯ TELEGRAM С УСЛОВИЯМИ ---
+                        msg = f"🔥 Новая вакансия: {v_title}\n💰 Зарплата: {v_salary}\n📍 Адрес: {v_loc}\n\n📝 Описание и условия:\n{v_desc}\n\n📞 Телефон: {v_phone}\n💬 WhatsApp: https://wa.me/{phone_clean}"
+                        
                         send_telegram(msg)
 
             st.markdown("### Управление моими вакансиями:")
