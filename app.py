@@ -2,7 +2,7 @@ import streamlit as st
 import sqlite3
 import pandas as pd
 import requests
-import re # <-- Добавили библиотеку для умного поиска по тексту
+import re
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
@@ -25,8 +25,8 @@ conn.commit()
 
 # --- TELEGRAM БОТ ---
 def send_telegram(message):
-    TOKEN = "ВАШ_ТОКЕН" # <-- ВАЖНО: Вставьте ваш токен!
-    CHAT_ID = "ВАШ_CHAT_ID" # <-- ВАЖНО: Вставьте ваш канал!
+    TOKEN = "8353625063:AAGvAYdYZ-oeo3H3OR_fo5VJA6DhJbLYWds" # <-- ВАЖНО: Вставьте ваш токен!
+    CHAT_ID = "@aktau_job_hack" # <-- ВАЖНО: Вставьте ваш канал!
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage?chat_id={CHAT_ID}&text={message}"
     try: requests.get(url)
     except: pass
@@ -35,7 +35,6 @@ def send_telegram(message):
 def calculate_smart_match(resume_text, vacancy_text):
     if not resume_text or not vacancy_text: return 0, "Недостаточно данных для анализа."
     
-    # 1. Базовое совпадение по ключевым словам (TF-IDF)
     vectorizer = TfidfVectorizer()
     try:
         tfidf_matrix = vectorizer.fit_transform([resume_text, vacancy_text])
@@ -43,35 +42,32 @@ def calculate_smart_match(resume_text, vacancy_text):
     except:
         base_score = 0
         
-    # 2. Умный поиск опыта работы (ищем цифры перед словами год/лет/г)
     req_exp_matches = re.findall(r'(\d+)\s*(?:год|лет|г)', vacancy_text.lower())
     user_exp_matches = re.findall(r'(\d+)\s*(?:год|лет|г)', resume_text.lower())
     
-    # Берем максимальную цифру (если написано "опыт от 2 до 5 лет", возьмет 5)
     req_exp = max([int(m) for m in req_exp_matches]) if req_exp_matches else 0
     user_exp = max([int(m) for m in user_exp_matches]) if user_exp_matches else 0
     
     bonus = 0
     recs = []
     
-    # 3. Логика ИИ-рекомендаций
     if req_exp > 0:
         if user_exp >= req_exp:
-            bonus += 25  # Даем огромный бонус за совпадение опыта!
+            bonus += 25
             recs.append(f"✅ Ваш опыт ({user_exp} г.) полностью покрывает требования работодателя ({req_exp} г.).")
         elif user_exp > 0:
             recs.append(f"⚠️ Работодатель ищет опыт от {req_exp} лет, а у вас {user_exp}. Сделайте акцент на ваших навыках при отклике!")
         else:
-            recs.append(f"⚠️ В вакансии указан опыт {req_exp} лет, но ИИ не нашел цифр в вашем резюме. Обязательно укажите стаж цифрами (например: '3 года')!")
+            recs.append(f"⚠️ В вакансии указан опыт {req_exp} лет, но ИИ не нашел цифр в вашем резюме.")
     else:
         if user_exp > 0:
             bonus += 15
-            recs.append("💡 Плюс: работодатель не указал жестких требований к опыту, а у вас он есть. Это выделит вас среди новичков.")
+            recs.append("💡 Плюс: работодатель не указал жестких требований к опыту, а у вас он есть.")
             
     if base_score < 20 and req_exp == 0:
         recs.append("💡 Совет: добавьте в свое резюме слова и навыки из описания этой вакансии, чтобы ИИ лучше вас замечал.")
         
-    final_score = min(round(base_score + bonus), 100) # Процент не может быть больше 100
+    final_score = min(round(base_score + bonus), 100)
     
     if not recs:
         recs.append("💡 Ваши профили подходят друг другу. Можно смело откликаться!")
@@ -124,7 +120,6 @@ if not st.session_state.logged_in:
                 else:
                     st.error("❌ Неверный логин или пароль")
 
-    # --- ТИЗЕР ВАКАНСИЙ НА ГЛАВНОЙ ---
     st.divider()
     st.subheader("🔥 Свежие вакансии на платформе")
     
@@ -138,6 +133,9 @@ if not st.session_state.logged_in:
             with cols[i]:
                 with st.container(border=True):
                     st.markdown(f"#### 💼 {row['title']}")
+                    # Если вакансия инклюзивная, показываем значок на главной!
+                    if "♿" in row['desc']:
+                        st.markdown("♿ **Доступно для людей с ОВЗ**")
                     st.markdown(f"**💰 {row['salary']}**")
                     st.caption(f"📍 {row['location']}")
                     
@@ -200,7 +198,13 @@ else:
                         st.error("Пожалуйста, заполните ФИО и должность.")
 
         with tab2:
-            st.subheader("Доступные вакансии")
+            col_search1, col_search2 = st.columns([3, 1])
+            with col_search1:
+                st.subheader("Доступные вакансии")
+            with col_search2:
+                # --- НОВЫЙ ФИЛЬТР ИНКЛЮЗИВНОСТИ ---
+                filter_inclusive = st.toggle("♿ Только для людей с ОВЗ")
+
             st.info("🚀 **Хотите узнавать о свежих вакансиях первыми?** Подписывайтесь на наш Telegram-канал: [👉 Перейти в Telegram](https://t.me/aktau_jobs_hack)")
             
             my_res = pd.read_sql_query("SELECT experience FROM resumes_v2 WHERE login=?", conn, params=(st.session_state.login,))
@@ -208,17 +212,24 @@ else:
             
             df_vac = pd.read_sql_query("SELECT * FROM vacancies_v2 ORDER BY id DESC", conn)
             
+            # Применяем фильтр, если включен
+            if filter_inclusive and not df_vac.empty:
+                df_vac = df_vac[df_vac['desc'].str.contains("♿", na=False)]
+            
             if df_vac.empty:
-                st.info("Пока нет доступных вакансий.")
+                st.warning("По вашему запросу пока нет вакансий.")
             else:
                 for index, row in df_vac.iterrows():
                     with st.container(border=True):
-                        st.markdown(f"### 💼 {row['title']}")
+                        if "♿" in row['desc']:
+                            st.markdown(f"### 💼 {row['title']} (♿ Инклюзивная)")
+                        else:
+                            st.markdown(f"### 💼 {row['title']}")
+                            
                         st.markdown(f"**💰 Зарплата:** {row['salary']} | **📍 Адрес:** {row['location']}")
                         with st.expander("Подробные условия"):
                             st.write(row['desc'])
                             
-                            # --- ВЫВОД РЕЗУЛЬТАТОВ УМНОГО ИИ ---
                             if my_skills:
                                 match_pct, recommendation = calculate_smart_match(my_skills, row['desc'])
                                 st.progress(match_pct / 100.0)
@@ -243,19 +254,30 @@ else:
                 v_loc = st.text_input("Адрес работы")
                 v_phone = st.text_input("Контактный телефон (WhatsApp)", value="+7", max_chars=12)
                 
+                # --- НОВАЯ ГАЛОЧКА ДЛЯ РАБОТОДАТЕЛЯ ---
+                v_inclusive = st.checkbox("♿ Вакансия подходит для людей с инвалидностью (ОВЗ)")
+                
                 if st.button("🚀 Создать вакансию", type="primary"):
                     if not v_phone.startswith("+7") or len(v_phone) < 11:
                         st.error("❌ Ошибка: Пожалуйста, введите корректный номер телефона (начиная с +7)")
                     elif not v_title or not v_desc:
                         st.warning("Пожалуйста, заполните должность и описание!")
                     else:
+                        # Если галочка стоит, добавляем бейдж прямо в текст описания
+                        final_desc = v_desc
+                        if v_inclusive:
+                            final_desc = "♿ **ОТКРЫТА ДЛЯ ЛЮДЕЙ С ИНВАЛИДНОСТЬЮ**\n\n" + v_desc
+                            
                         c.execute("INSERT INTO vacancies_v2 (login, title, desc, salary, location, phone) VALUES (?, ?, ?, ?, ?, ?)", 
-                                  (st.session_state.login, v_title, v_desc, v_salary, v_loc, v_phone))
+                                  (st.session_state.login, v_title, final_desc, v_salary, v_loc, v_phone))
                         conn.commit()
                         st.success("✅ Вакансия опубликована!")
                         
                         phone_clean = v_phone.replace("+", "").replace(" ", "").replace("-", "")
-                        msg = f"🔥 Новая вакансия: {v_title}\n💰 Зарплата: {v_salary}\n📍 Адрес: {v_loc}\n\n📝 Описание и условия:\n{v_desc}\n\n📞 Телефон: {v_phone}\n💬 WhatsApp: https://wa.me/{phone_clean}"
+                        
+                        # Добавляем отметку в Телеграм!
+                        tg_title = f"♿ {v_title} (Инклюзивная вакансия)" if v_inclusive else v_title
+                        msg = f"🔥 Новая вакансия: {tg_title}\n💰 Зарплата: {v_salary}\n📍 Адрес: {v_loc}\n\n📝 Описание:\n{v_desc}\n\n📞 Телефон: {v_phone}\n💬 WhatsApp: https://wa.me/{phone_clean}"
                         send_telegram(msg)
 
             st.markdown("### Управление моими вакансиями:")
