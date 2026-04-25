@@ -187,17 +187,33 @@ else:
         with tab1:
             st.subheader("Опубликовать новую вакансию")
             with st.container(border=True):
+               with tab1:
+            st.subheader("Опубликовать новую вакансию")
+            with st.container(border=True):
                 v_title = st.text_input("Должность")
                 v_desc = st.text_area("Описание условий и требований")
                 v_salary = st.text_input("Заработная плата (например: 150 000 тг)")
                 v_loc = st.text_input("Адрес работы")
-                v_phone = st.text_input("Контактный телефон (WhatsApp)")
+                
+                # Добавили value="+7" и ограничили максимальную длину
+                v_phone = st.text_input("Контактный телефон (WhatsApp)", value="+7", max_chars=12)
                 
                 if st.button("🚀 Создать вакансию", type="primary"):
-                    c.execute("INSERT INTO vacancies_v2 (login, title, desc, salary, location, phone) VALUES (?, ?, ?, ?, ?, ?)", 
-                              (st.session_state.login, v_title, v_desc, v_salary, v_loc, v_phone))
-                    conn.commit()
-                    st.success("✅ Вакансия опубликована!")
+                    # Проверяем, что номер начинается на +7 и достаточно длинный
+                    if not v_phone.startswith("+7") or len(v_phone) < 12:
+                        st.error("❌ Ошибка: Пожалуйста, введите корректный номер телефона в формате +77XXXXXXXXX")
+                    elif not v_title or not v_desc:
+                        st.warning("Пожалуйста, заполните должность и описание!")
+                    else:
+                        c.execute("INSERT INTO vacancies_v2 (login, title, desc, salary, location, phone) VALUES (?, ?, ?, ?, ?, ?)", 
+                                  (st.session_state.login, v_title, v_desc, v_salary, v_loc, v_phone))
+                        conn.commit()
+                        st.success("✅ Вакансия опубликована!")
+                        
+                        # Отправка в Телеграм
+                        phone_clean = v_phone.replace("+", "").replace(" ", "").replace("-", "")
+                        msg = f"🔥 Новая вакансия: {v_title}\n💰 Зарплата: {v_salary}\n📍 Адрес: {v_loc}\n📞 Телефон: {v_phone}\n💬 WhatsApp: https://wa.me/{phone_clean}"
+                        send_telegram(msg)
                     # Отправка в Телеграм
                     phone_clean = v_phone.replace("+", "").replace(" ", "").replace("-", "")
                     msg = f"🔥 Новая вакансия: {v_title}\n💰 Зарплата: {v_salary}\n📍 Адрес: {v_loc}\n📞 Телефон: {v_phone}\n💬 WhatsApp: https://wa.me/{phone_clean}"
